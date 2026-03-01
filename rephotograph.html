@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Re-Photo 📸</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+
+  :root {
+    --black: #0a0a0a;
+    --white: #f5f0e8;
+    --accent: #ff3c00;
+    --dim: #1a1a1a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--black);
+    color: var(--white);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* GRAIN OVERLAY */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
+    pointer-events: none;
+    opacity: 0.4;
+    z-index: 999;
+  }
+
+  /* ─── STEP 1: Upload ─── */
+  #step-upload {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    animation: fadeIn .6s ease;
+  }
+
+  .title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(3rem, 10vw, 7rem);
+    letter-spacing: 0.05em;
+    line-height: 1;
+    text-align: center;
+  }
+
+  .title span { color: var(--accent); }
+
+  .subtitle {
+    font-size: 0.75rem;
+    color: #666;
+    text-align: center;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .upload-btn {
+    position: relative;
+    border: 2px solid var(--white);
+    background: transparent;
+    color: var(--white);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.9rem;
+    letter-spacing: 0.1em;
+    padding: 1rem 2.5rem;
+    cursor: pointer;
+    text-transform: uppercase;
+    overflow: hidden;
+    transition: color .3s;
+  }
+
+  .upload-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--white);
+    transform: translateX(-100%);
+    transition: transform .3s cubic-bezier(.4,0,.2,1);
+    z-index: -1;
+  }
+
+  .upload-btn:hover { color: var(--black); }
+  .upload-btn:hover::before { transform: translateX(0); }
+
+  #file-input { display: none; }
+
+  /* ─── STEP 2: Display & Camera ─── */
+  #step-camera {
+    display: none;
+    position: fixed;
+    inset: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--black);
+  }
+
+  #step-camera.active { display: flex; }
+
+  .camera-ui {
+    position: relative;
+    width: min(90vw, 500px);
+    aspect-ratio: 4/3;
+    border: 1px solid #333;
+    overflow: hidden;
+  }
+
+  /* The gallery photo shown as "subject" */
+  #gallery-photo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #111;
+  }
+
+  /* Camera viewfinder overlay */
+  #camera-feed {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity .5s;
+    z-index: 2;
+  }
+
+  #camera-feed.visible { opacity: 0.55; }
+
+  /* HUD corners */
+  .hud {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  .corner {
+    position: absolute;
+    width: 24px; height: 24px;
+    border-color: var(--accent);
+    border-style: solid;
+  }
+  .corner.tl { top: 12px; left: 12px; border-width: 2px 0 0 2px; }
+  .corner.tr { top: 12px; right: 12px; border-width: 2px 2px 0 0; }
+  .corner.bl { bottom: 12px; left: 12px; border-width: 0 0 2px 2px; }
+  .corner.br { bottom: 12px; right: 12px; border-width: 0 2px 2px 0; }
+
+  .crosshair {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 30px; height: 30px;
+  }
+
+  .crosshair::before, .crosshair::after {
+    content: '';
+    position: absolute;
+    background: rgba(255,60,0,0.7);
+  }
+  .crosshair::before { width: 100%; height: 1px; top: 50%; left: 0; }
+  .crosshair::after { width: 1px; height: 100%; left: 50%; top: 0; }
+
+  .hud-text {
+    position: absolute;
+    bottom: 12px; right: 12px;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    opacity: 0.8;
+  }
+
+  .iso {
+    position: absolute;
+    top: 12px; right: 12px;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    color: var(--white);
+    opacity: 0.6;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    margin-top: 1.5rem;
+    z-index: 10;
+  }
+
+  .ctrl-btn {
+    background: none;
+    border: 1px solid #444;
+    color: var(--white);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    padding: .6rem 1.2rem;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: border-color .2s, color .2s;
+  }
+
+  .ctrl-btn:hover { border-color: var(--white); }
+
+  .shutter {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    border: 3px solid var(--white);
+    background: none;
+    cursor: pointer;
+    position: relative;
+    transition: transform .15s;
+    flex-shrink: 0;
+  }
+
+  .shutter::after {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background: var(--white);
+    transition: background .15s;
+  }
+
+  .shutter:hover { transform: scale(1.05); }
+  .shutter:hover::after { background: var(--accent); }
+  .shutter:active { transform: scale(0.95); }
+
+  /* ─── Flash ─── */
+  #flash {
+    position: fixed;
+    inset: 0;
+    background: white;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 9999;
+    transition: opacity .05s;
+  }
+
+  #flash.go { opacity: 1; }
+
+  /* ─── Step 3: Result ─── */
+  #step-result {
+    display: none;
+    position: fixed;
+    inset: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    background: var(--black);
+    animation: fadeIn .4s ease;
+  }
+
+  #step-result.active { display: flex; }
+
+  .result-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+  }
+
+  #result-photo {
+    width: min(85vw, 480px);
+    border: 1px solid #333;
+    display: block;
+  }
+
+  .result-meta {
+    font-size: 0.65rem;
+    color: #555;
+    letter-spacing: 0.1em;
+    text-align: center;
+  }
+
+  .result-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: .5rem;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Scan line animation on shutter press */
+  @keyframes scanDown {
+    from { top: 0; }
+    to   { top: 100%; }
+  }
+
+  .scan-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: rgba(255,255,255,0.6);
+    z-index: 5;
+    animation: scanDown .25s linear forwards;
+  }
+</style>
+</head>
+<body>
+
+<!-- STEP 1 -->
+<div id="step-upload">
+  <div class="title">RE<span>—</span>PHOTO<span>.</span></div>
+  <div class="subtitle">Photographier une photo déjà dans ta galerie</div>
+
+  <button class="upload-btn" onclick="document.getElementById('file-input').click()">
+    ⊕ Choisir une photo
+  </button>
+  <input type="file" id="file-input" accept="image/*" onchange="loadPhoto(this)">
+
+  <div class="subtitle" style="margin-top:1rem; font-size:0.65rem;">
+    (100% local — rien n'est envoyé nulle part)
+  </div>
+</div>
+
+<!-- STEP 2 -->
+<div id="step-camera">
+  <div class="camera-ui" id="camera-ui">
+    <img id="gallery-photo" src="" alt="ta photo">
+    <video id="camera-feed" autoplay playsinline muted></video>
+    <div class="hud">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="crosshair"></div>
+      <div class="iso" id="iso-display">ISO 100</div>
+      <div class="hud-text" id="hud-status">READY</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn" onclick="toggleCamera()">📷 Caméra</button>
+    <button class="shutter" id="shutter-btn" onclick="takePhoto()" title="Prendre la photo"></button>
+    <button class="ctrl-btn" onclick="resetAll()">← Retour</button>
+  </div>
+</div>
+
+<!-- FLASH -->
+<div id="flash"></div>
+
+<!-- STEP 3 -->
+<div id="step-result">
+  <div class="result-label">PHOTO PRISE ✓</div>
+  <img id="result-photo" src="" alt="résultat">
+  <div class="result-meta" id="result-meta"></div>
+  <div class="result-actions">
+    <button class="upload-btn" onclick="downloadPhoto()">↓ Télécharger</button>
+    <button class="ctrl-btn" style="padding:.9rem 1.5rem" onclick="goBackToCamera()">← Recommencer</button>
+  </div>
+</div>
+
+<canvas id="canvas" style="display:none"></canvas>
+<span id="dl-filename" style="display:none"></span>
+<script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
+
+<script>
+  let stream = null;
+  let cameraActive = false;
+  let resultDataUrl = null;
+  let gpsCoords = null;
+
+  // ── Device detection ──────────────────────────────────────────────────────
+  function detectDevice() {
+    const ua = navigator.userAgent;
+    const profiles = [
+      // Samsung
+      { test: /SM-G781/i,          make: 'samsung', model: 'SM-G781W',   focal: [470,100], fn: [18,10], iso: 320, exp: [1,30],  fw35: 26, w: 3024, h: 4032, soft: 'G781WVLU9GXC1' },
+      { test: /SM-S928/i,          make: 'samsung', model: 'SM-S928B',   focal: [700,100], fn: [17,10], iso: 50,  exp: [1,600], fw35: 24, w: 4080, h: 3060, soft: 'S928BXXU3AXE5' },
+      { test: /SM-S918/i,          make: 'samsung', model: 'SM-S918B',   focal: [650,100], fn: [17,10], iso: 64,  exp: [1,500], fw35: 23, w: 4080, h: 3060, soft: 'S918BXXU3AXC6' },
+      { test: /SM-S911/i,          make: 'samsung', model: 'SM-S911B',   focal: [620,100], fn: [18,10], iso: 64,  exp: [1,500], fw35: 23, w: 4080, h: 3060, soft: 'S911BXXU3AXC6' },
+      { test: /SM-A546/i,          make: 'samsung', model: 'SM-A546B',   focal: [500,100], fn: [18,10], iso: 100, exp: [1,200], fw35: 26, w: 4080, h: 3060, soft: 'A546BXXU4CXC1' },
+      { test: /Samsung|SM-/i,      make: 'samsung', model: 'SM-A145F',   focal: [500,100], fn: [18,10], iso: 125, exp: [1,200], fw35: 26, w: 3264, h: 2448, soft: 'A145FXXU4BWJ2' },
+      // Apple
+      { test: /iPhone OS 17/i,     make: 'Apple',   model: 'iPhone 15 Pro', focal: [686,100], fn: [18,10], iso: 48,  exp: [1,500], fw35: 24, w: 4032, h: 3024, soft: 'Photos 17.0' },
+      { test: /iPhone OS 16/i,     make: 'Apple',   model: 'iPhone 14 Pro', focal: [686,100], fn: [18,10], iso: 64,  exp: [1,400], fw35: 24, w: 4032, h: 3024, soft: 'Photos 16.0' },
+      { test: /iPhone/i,           make: 'Apple',   model: 'iPhone 13',     focal: [577,100], fn: [15,10], iso: 100, exp: [1,250], fw35: 26, w: 4032, h: 3024, soft: 'Photos 15.0' },
+      // Google
+      { test: /Pixel 8/i,          make: 'Google',  model: 'Pixel 8 Pro',   focal: [700,100], fn: [17,10], iso: 56,  exp: [1,500], fw35: 24, w: 4080, h: 3072, soft: 'Camera 9.1' },
+      { test: /Pixel/i,            make: 'Google',  model: 'Pixel 7',       focal: [680,100], fn: [19,10], iso: 80,  exp: [1,350], fw35: 25, w: 4080, h: 3072, soft: 'Camera 8.7' },
+      // Others
+      { test: /OnePlus/i,          make: 'OnePlus', model: 'CPH2447',       focal: [680,100], fn: [18,10], iso: 64,  exp: [1,450], fw35: 23, w: 4080, h: 3060, soft: 'Camera 5.0' },
+      { test: /Xiaomi|POCO|Redmi/i,make: 'Xiaomi',  model: '23116PN5BC',    focal: [560,100], fn: [16,10], iso: 50,  exp: [1,600], fw35: 23, w: 4080, h: 3060, soft: 'Camera 5.2' },
+    ];
+    for (const p of profiles) if (p.test.test(ua)) return p;
+    // Fallback = SM-G781W (ton téléphone)
+    return { make: 'samsung', model: 'SM-G781W', focal: [470,100], fn: [18,10], iso: 320, exp: [1,30], fw35: 26, w: 3024, h: 4032, soft: 'G781WVLU9GXC1' };
+  }
+
+  // ── GPS helpers ───────────────────────────────────────────────────────────
+  function toDMS(decimal) {
+    const d = Math.abs(decimal);
+    const deg = Math.floor(d);
+    const minFull = (d - deg) * 60;
+    const min = Math.floor(minFull);
+    const sec = Math.round((minFull - min) * 60 * 100);
+    return [[deg,1],[min,1],[sec,100]];
+  }
+
+  function tryGetGPS() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(pos => {
+      gpsCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      document.getElementById('hud-status').textContent = 'GPS OK';
+      setTimeout(() => document.getElementById('hud-status').textContent = 'READY', 1500);
+    }, () => {});
+  }
+
+  // ── Sensor noise ──────────────────────────────────────────────────────────
+  function addSensorNoise(ctx, w, h, intensity = 18) {
+    const imageData = ctx.getImageData(0, 0, w, h);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const n = (Math.random() - 0.5) * intensity;
+      data[i]   = Math.min(255, Math.max(0, data[i]   + n));
+      data[i+1] = Math.min(255, Math.max(0, data[i+1] + n));
+      data[i+2] = Math.min(255, Math.max(0, data[i+2] + n));
+    }
+    ctx.putImageData(imageData, 0, 0);
+  }
+
+  // ── EXIF injection ────────────────────────────────────────────────────────
+  function injectEXIF(jpegDataUrl, device, now) {
+    if (typeof piexif === 'undefined') return jpegDataUrl;
+
+    const pad2 = n => String(n).padStart(2,'0');
+    const dateStr = `${now.getFullYear()}:${pad2(now.getMonth()+1)}:${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+
+    const exifObj = {
+      '0th': {
+        [piexif.ImageIFD.Make]:              device.make,
+        [piexif.ImageIFD.Model]:             device.model,
+        [piexif.ImageIFD.Software]:          device.soft || 'Camera',
+        [piexif.ImageIFD.DateTime]:          dateStr,
+        [piexif.ImageIFD.XResolution]:       [72,1],
+        [piexif.ImageIFD.YResolution]:       [72,1],
+        [piexif.ImageIFD.ResolutionUnit]:    2,
+        [piexif.ImageIFD.YCbCrPositioning]:  1,
+      },
+      'Exif': {
+        [piexif.ExifIFD.ExposureTime]:          device.exp,
+        [piexif.ExifIFD.FNumber]:               device.fn,
+        [piexif.ExifIFD.ExposureProgram]:       2,
+        [piexif.ExifIFD.ISOSpeedRatings]:       device.iso,
+        [piexif.ExifIFD.DateTimeOriginal]:      dateStr,
+        [piexif.ExifIFD.DateTimeDigitized]:     dateStr,
+        [piexif.ExifIFD.ShutterSpeedValue]:     [Math.round(Math.log2(device.exp[1]/device.exp[0])*100), 100],
+        [piexif.ExifIFD.ApertureValue]:         [Math.round(Math.log2(device.fn[0]/device.fn[1])*200), 100],
+        [piexif.ExifIFD.BrightnessValue]:       [400, 100],
+        [piexif.ExifIFD.MeteringMode]:          5,
+        [piexif.ExifIFD.Flash]:                 0,
+        [piexif.ExifIFD.FocalLength]:           device.focal,
+        [piexif.ExifIFD.ColorSpace]:            1,
+        [piexif.ExifIFD.WhiteBalance]:          0,
+        [piexif.ExifIFD.FocalLengthIn35mmFilm]: device.fw35 || 26,
+        [piexif.ExifIFD.SceneCaptureType]:      0,
+        [piexif.ExifIFD.PixelXDimension]:       device.w || 3024,
+        [piexif.ExifIFD.PixelYDimension]:       device.h || 4032,
+      }
+    };
+
+    if (gpsCoords) {
+      exifObj['GPS'] = {
+        [piexif.GPSIFD.GPSLatitudeRef]:  gpsCoords.lat >= 0 ? 'N' : 'S',
+        [piexif.GPSIFD.GPSLatitude]:     toDMS(gpsCoords.lat),
+        [piexif.GPSIFD.GPSLongitudeRef]: gpsCoords.lon >= 0 ? 'E' : 'W',
+        [piexif.GPSIFD.GPSLongitude]:    toDMS(gpsCoords.lon),
+        [piexif.GPSIFD.GPSAltitudeRef]:  0,
+        [piexif.GPSIFD.GPSAltitude]:     [50,1],
+      };
+    }
+
+    try {
+      const exifBytes = piexif.dump(exifObj);
+      return piexif.insert(exifBytes, jpegDataUrl);
+    } catch(e) {
+      console.warn('EXIF injection failed:', e);
+      return jpegDataUrl;
+    }
+  }
+
+  // ── Photo load ────────────────────────────────────────────────────────────
+  function loadPhoto(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('gallery-photo').src = e.target.result;
+      document.getElementById('step-upload').style.display = 'none';
+      document.getElementById('step-camera').classList.add('active');
+      startIsoFlicker();
+      tryGetGPS();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ── Camera ────────────────────────────────────────────────────────────────
+  async function toggleCamera() {
+    if (cameraActive) { stopCamera(); return; }
+    await startCamera();
+  }
+
+  async function startCamera() {
+    // Camera requires HTTPS or localhost
+    const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (!isSecure) {
+      showCamWarning('⚠️ La caméra nécessite HTTPS ou localhost.\nOuvre ce fichier via un serveur local (ex: npx serve .) ou héberge-le en HTTPS.');
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showCamWarning('⚠️ getUserMedia non supporté dans ce navigateur.');
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false
+      });
+      const feed = document.getElementById('camera-feed');
+      feed.srcObject = stream;
+      await feed.play().catch(() => {});
+      feed.classList.add('visible');
+      cameraActive = true;
+      document.getElementById('hud-status').textContent = 'LIVE';
+      document.querySelector('[onclick="toggleCamera()"]').textContent = '⏹ Stop';
+    } catch(err) {
+      const msg = err.name === 'NotAllowedError'
+        ? '⚠️ Permission caméra refusée. Autorise l\'accès dans les paramètres du navigateur.'
+        : `⚠️ Caméra inaccessible : ${err.message}`;
+      showCamWarning(msg);
+    }
+  }
+
+  function showCamWarning(msg) {
+    document.getElementById('hud-status').textContent = 'NO CAM';
+    // Show inline instead of alert
+    const existing = document.getElementById('cam-warn');
+    if (existing) existing.remove();
+    const el = document.createElement('div');
+    el.id = 'cam-warn';
+    el.style.cssText = 'position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:#1a0000;border:1px solid #ff3c00;color:#f5f0e8;font-family:Space Mono,monospace;font-size:0.65rem;padding:.8rem 1.2rem;max-width:90vw;text-align:center;z-index:100;white-space:pre-line';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 6000);
+  }
+
+  function stopCamera() {
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    const feed = document.getElementById('camera-feed');
+    feed.srcObject = null;
+    feed.classList.remove('visible');
+    cameraActive = false;
+    document.getElementById('hud-status').textContent = 'READY';
+    document.querySelector('[onclick="toggleCamera()"]').textContent = '📷 Caméra';
+  }
+
+  // ── Shutter ───────────────────────────────────────────────────────────────
+  function takePhoto() {
+    const ui = document.getElementById('camera-ui');
+    const scan = document.createElement('div');
+    scan.className = 'scan-line';
+    ui.appendChild(scan);
+    setTimeout(() => scan.remove(), 300);
+
+    const flash = document.getElementById('flash');
+    flash.classList.add('go');
+    setTimeout(() => flash.classList.remove('go'), 120);
+
+    setTimeout(() => {
+      const device = detectDevice();
+      const now = new Date();
+
+      const img = document.getElementById('gallery-photo');
+      const canvas = document.getElementById('canvas');
+      // Use device native resolution
+      canvas.width  = device.w || 3024;
+      canvas.height = device.h || 4032;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      // 1. Sensor noise (grain)
+      addSensorNoise(ctx, canvas.width, canvas.height, 14);
+
+      // 2. Vignette
+      const grad = ctx.createRadialGradient(
+        canvas.width/2, canvas.height/2, canvas.width * 0.3,
+        canvas.width/2, canvas.height/2, canvas.width * 0.72
+      );
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, 'rgba(0,0,0,0.45)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 3. Export JPEG then inject EXIF (no visible timestamp — stored in EXIF)
+      const rawJpeg = canvas.toDataURL('image/jpeg', 0.92);
+      resultDataUrl = injectEXIF(rawJpeg, device, now);
+
+      // Samsung filename format: YYYYMMDD_HHmmss.jpg
+      const pad2 = n => String(n).padStart(2,'0');
+      const fname = `${now.getFullYear()}${pad2(now.getMonth()+1)}${pad2(now.getDate())}_${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`;
+      document.getElementById('dl-filename').dataset.name = fname;
+
+      // Show result
+      stopCamera();
+      document.getElementById('result-photo').src = resultDataUrl;
+
+      const exifInfo = gpsCoords
+        ? `${device.model}  •  f/${(device.fn[0]/device.fn[1]).toFixed(1)}  ISO ${device.iso}  1/${device.exp[1]}s  ${device.fw35}mm  •  GPS ✓`
+        : `${device.model}  •  f/${(device.fn[0]/device.fn[1]).toFixed(1)}  ISO ${device.iso}  1/${device.exp[1]}s  ${device.fw35}mm`;
+      document.getElementById('result-meta').textContent =
+        `${canvas.width}×${canvas.height}  •  ${exifInfo}`;
+
+      document.getElementById('step-camera').classList.remove('active');
+      document.getElementById('step-result').classList.add('active');
+    }, 150);
+  }
+
+  function downloadPhoto() {
+    if (!resultDataUrl) return;
+    const a = document.createElement('a');
+    a.href = resultDataUrl;
+    const fname = document.getElementById('dl-filename')?.dataset?.name;
+    a.download = (fname || `IMG_${Date.now()}`) + '.jpg';
+    a.click();
+  }
+
+  function goBackToCamera() {
+    document.getElementById('step-result').classList.remove('active');
+    document.getElementById('step-camera').classList.add('active');
+    resultDataUrl = null;
+  }
+
+  function resetAll() {
+    stopCamera();
+    document.getElementById('step-camera').classList.remove('active');
+    document.getElementById('step-upload').style.display = 'flex';
+    document.getElementById('gallery-photo').src = '';
+    document.getElementById('file-input').value = '';
+    gpsCoords = null;
+  }
+
+  const isos = ['ISO 48','ISO 64','ISO 100','ISO 200','ISO 400','ISO 800'];
+  function startIsoFlicker() {
+    setInterval(() => {
+      const el = document.getElementById('iso-display');
+      if (el) el.textContent = isos[Math.floor(Math.random() * isos.length)];
+    }, 1800);
+  }
+</script>
+</body>
+</html>
